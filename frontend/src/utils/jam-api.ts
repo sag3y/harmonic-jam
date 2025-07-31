@@ -58,3 +58,89 @@ export async function getCollectionsMetadata(): Promise<ICollection[]> {
         throw error;
     }
 }
+
+export async function addCompanyToCollection(
+  collectionId: string,
+  companyId: number
+): Promise<ICompany> {
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/collections/${collectionId}/companies`,
+      {
+        company_id: companyId,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error adding company to collection:", error);
+    throw error;
+  }
+}
+
+export async function removeCompanyFromCollection(
+  collectionId: string,
+  companyId: number
+): Promise<{ message: string }> {
+  try {
+    const response = await axios.delete(
+      `${BASE_URL}/collections/${collectionId}/companies/${companyId}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error removing company from collection:", error);
+    throw error;
+  }
+}
+
+export async function bulkAddCompaniesToCollection(
+  collectionId: string,
+  companyIds: number[]
+): Promise<{ companies: ICompany[]; total: number }> {
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/collections/${collectionId}/companies/bulk`,
+      {
+        company_ids: companyIds,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error bulk-adding companies to collection:", error);
+    throw error;
+  }
+}
+
+export async function bulkRemoveCompaniesFromCollection(
+  collectionId: string,
+  companyIds: number[]
+): Promise<{ companies: ICompany[]; total: number }> {
+  try {
+    const response = await axios.request({
+      url: `${BASE_URL}/collections/${collectionId}/companies/bulk`,
+      method: "DELETE",
+      data: { company_ids: companyIds },
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error bulk-removing companies from collection:", error);
+    throw error;
+  }
+}
