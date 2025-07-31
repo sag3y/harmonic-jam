@@ -25,12 +25,11 @@ Hi! I’m excited to be interviewing for a SWE role at Harmonic. Here are some c
 
 Video explanation:
 
+https://github.com/user-attachments/assets/a93109c8-6ffb-415a-a092-0fee6d659477
+
 
 https://github.com/user-attachments/assets/908abd63-6b49-4f5d-a868-5a4dc7a213cc
 
-
-
-https://github.com/user-attachments/assets/a93109c8-6ffb-415a-a092-0fee6d659477
 
 
 
