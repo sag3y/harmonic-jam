@@ -127,7 +127,6 @@ def add_company_to_collection(
 
     return updated_company
 
-
 @router.delete("/{collection_id}/companies/bulk", response_model=CompanyBatchOutput)
 async def bulk_remove_companies_from_collection(
     collection_id: uuid.UUID,
@@ -136,19 +135,34 @@ async def bulk_remove_companies_from_collection(
 ):
     """
     Removes multiple companies from the specified collection.
+    Optimization: Only attempt to delete associations that exist.
     """
     company_ids = request.company_ids
+    # OPTIMIZATION: Get only the IDs that are actually in the collection.
+    existing_company_ids_query = (
+        db.query(database.CompanyCollectionAssociation.company_id)
+        .filter(
+            database.CompanyCollectionAssociation.collection_id == collection_id,
+            database.CompanyCollectionAssociation.company_id.in_(company_ids)
+        )
+    )
+    existing_company_ids = {result[0] for result in existing_company_ids_query.all()}
 
+    # If nothing to delete, return early with a consistent response.
+    if not existing_company_ids:
+        updated_companies = fetch_companies_with_liked(db, company_ids)
+        return {"companies": updated_companies, "total": len(updated_companies)}
+
+    # Delete only the existing associations.
     db.query(database.CompanyCollectionAssociation).filter(
         database.CompanyCollectionAssociation.collection_id == collection_id,
-        database.CompanyCollectionAssociation.company_id.in_(company_ids)
+        database.CompanyCollectionAssociation.company_id.in_(existing_company_ids)
     ).delete(synchronize_session=False)
 
     db.commit()
 
     updated_companies = fetch_companies_with_liked(db, company_ids)
     return {"companies": updated_companies, "total": len(updated_companies)}
-
     
 @router.delete("/{collection_id}/companies/{company_id}", response_model=dict)
 def remove_company_from_collection(
@@ -186,31 +200,42 @@ def remove_company_from_collection(
 @router.post("/{collection_id}/companies/bulk", response_model=CompanyBatchOutput)
 def bulk_add_companies_to_collection(
     collection_id: uuid.UUID,
-    request: CompanyBulkAddOrRemoveRequest,  # list of IDs
+    request: CompanyBulkAddOrRemoveRequest,
     db: Session = Depends(database.get_db),
 ):
     """
     Adds multiple companies to the specified collection.
+    Optimization: Only attempt to add associations that exist.
     """
-    company_ids = request.company_ids
-
-    associations = []
-    for company_id in company_ids:
-        exists = (
-            db.query(database.CompanyCollectionAssociation)
-            .filter_by(collection_id=collection_id, company_id=company_id)
-            .first()
+    # OPTIMIZATION: First, find which of the requested companies are already in the collection.
+    existing_company_ids_query = (
+        db.query(database.CompanyCollectionAssociation.company_id)
+        .filter(
+            database.CompanyCollectionAssociation.collection_id == collection_id,
+            database.CompanyCollectionAssociation.company_id.in_(request.company_ids)
         )
-        if not exists:
-            associations.append(
-                database.CompanyCollectionAssociation(
-                    collection_id=collection_id,
-                    company_id=company_id
-                )
-            )
+    )
+    existing_company_ids = {result[0] for result in existing_company_ids_query.all()}
 
+    # Filter the incoming list to only include companies that are not already in the collection.
+    company_ids_to_add = [
+        cid for cid in request.company_ids if cid not in existing_company_ids
+    ]
+
+    # If there are no new companies to add, we can return early.
+    if not company_ids_to_add:
+        # We still fetch the data for the requested companies to return a consistent response.
+        updated_companies = fetch_companies_with_liked(db, request.company_ids)
+        return {"companies": updated_companies, "total": len(updated_companies)}
+
+    # Create new association objects only for the new companies.
+    associations = [
+        database.CompanyCollectionAssociation(collection_id=collection_id, company_id=cid)
+        for cid in company_ids_to_add
+    ]
+    
     db.add_all(associations)
     db.commit()
 
-    updated_companies = fetch_companies_with_liked(db, company_ids)
+    updated_companies = fetch_companies_with_liked(db, request.company_ids)
     return {"companies": updated_companies, "total": len(updated_companies)}

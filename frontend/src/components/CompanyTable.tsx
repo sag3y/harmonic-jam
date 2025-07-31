@@ -13,12 +13,14 @@ const CompanyTable = (props: { selectedCollectionId: string }) => {
   const [isBulkActionLoading, setIsBulkActionLoading] = useState<boolean>(false);
 
   const fetchCompanies = () => {
-    getCollectionsById(props.selectedCollectionId, offset, pageSize).then(
-      (newResponse) => {
-        setResponse(newResponse.companies);
-        setTotal(newResponse.total);
-      }
-    );
+    if (props.selectedCollectionId) {
+        getCollectionsById(props.selectedCollectionId, offset, pageSize).then(
+          (newResponse) => {
+            setResponse(newResponse.companies);
+            setTotal(newResponse.total);
+          }
+        );
+    }
   };
 
   useEffect(() => {
@@ -47,7 +49,7 @@ const CompanyTable = (props: { selectedCollectionId: string }) => {
 
     try {
       await bulkAddCompaniesToCollection(likedCollectionId, selectedCompanies);
-      fetchCompanies();
+      fetchCompanies(); // Re-fetch is appropriate for bulk actions
     } catch (error) {
       console.error("Error bulk liking companies:", error);
     } finally {
@@ -62,7 +64,7 @@ const CompanyTable = (props: { selectedCollectionId: string }) => {
 
     try {
       await bulkRemoveCompaniesFromCollection(likedCollectionId, selectedCompanies);
-      fetchCompanies();
+      fetchCompanies(); // Re-fetch is appropriate for bulk actions
     } catch (error) {
       console.error("Error bulk unliking companies:", error);
     } finally {
@@ -71,27 +73,41 @@ const CompanyTable = (props: { selectedCollectionId: string }) => {
     }
   };
 
+  // OPTIMIZATION: Optimistically updates UI
   const handleToggleLike = async (companyId: number, isLiked: boolean) => {
-    try {
-      if (!likedCollectionId) {
-        console.error("Liked collection ID not found");
-        return;
-      }
+    if (!likedCollectionId) {
+      console.error("Liked collection ID not found");
+      return;
+    }
 
+    // Updates the UI right away.
+    setResponse(currentCompanies =>
+      currentCompanies.map(company =>
+        company.id === companyId ? { ...company, liked: !isLiked } : company
+      )
+    );
+
+    // Sends the API request in the background. If liked, remove it. If not, add it
+    try {
       if (isLiked) {
         await removeCompanyFromCollection(likedCollectionId, companyId);
       } else {
         await addCompanyToCollection(likedCollectionId, companyId);
       }
-
-      fetchCompanies();
     } catch (error) {
       console.error("Error toggling company like status:", error);
+      // If  API call fails, revert the UI change to the original 'isLiked' state and notify the user
+      setResponse(currentCompanies =>
+        currentCompanies.map(company =>
+          company.id === companyId ? { ...company, liked: isLiked } : company
+        )
+      );
+      alert("Failed to update like status. Please try again.");
     }
   };
 
   const columns: GridColDef[] = [
-    { field: "liked", headerName: "Liked", width: 90 },
+    { field: "liked", headerName: "Liked", width: 90, type: 'boolean' },
     { field: "id", headerName: "ID", width: 90 },
     { field: "company_name", headerName: "Company Name", width: 200 },
     {
